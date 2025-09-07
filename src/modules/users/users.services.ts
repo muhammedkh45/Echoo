@@ -63,7 +63,6 @@ class UserServices {
         throw new AppError("Email or Password is Invalid.", 401);
       }
       const match = await Compare(password, user.password);
-      console.log(match);
 
       if (!match) {
         throw new AppError("Email or Password is Invalid.", 401);
