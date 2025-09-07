@@ -6,6 +6,7 @@ import dotenv from "dotenv";
 import path from "node:path";
 import { AppError } from "./utils/classError";
 import userRouter from "./modules/users/users.controller";
+import connectDB from "./DB/connection.db";
 dotenv.config({ path: path.resolve("config/.env") });
 const app: express.Application = express();
 const port: string | number = process.env.PORT || 5000;
@@ -19,8 +20,9 @@ const limiter = rateLimit({
   skipSuccessfulRequests: true,
   legacyHeaders: false,
 });
-const bootstrap = () => {
+const bootstrap = async () => {
   app.use(express.json(), helmet(), cors(), limiter);
+  await connectDB()
   app.get("/", (req: Request, res: Response) =>
     res.status(200).json({ message: "Hello World!" })
   );
