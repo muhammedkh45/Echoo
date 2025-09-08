@@ -33,4 +33,24 @@ export const signUpSchema = {
     }),
 };
 
+export const logInSchema = {
+  body: z.strictObject({
+    email: z.email(),
+    password: z
+      .string()
+      .regex(
+        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/
+      ),
+  }),
+};
+export const confirmEmailSchema = {
+  body: z.strictObject({
+    email: z.email(),
+    otp: z.string().min(6).max(6),
+  }),
+};
 export type signUpSchemaType = Partial<z.infer<typeof signUpSchema.body>>;
+export type logInSchemaType = Partial<z.infer<typeof logInSchema.body>>;
+export type confirmEmailSchemaType = Partial<
+  z.infer<typeof confirmEmailSchema.body>
+>;

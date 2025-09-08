@@ -24,6 +24,8 @@ export interface IUser {
   createdAt: Date;
   updatedAt: Date;
   isVerified?: boolean;
+  otp?: string;
+  otpExpires?: Date;
 }
 
 const userSchema = new mongoose.Schema<IUser>(
@@ -50,6 +52,11 @@ const userSchema = new mongoose.Schema<IUser>(
     gender: { type: String, enum: GenderType, required: true },
     role: { type: String, enum: RoleType },
     isVerified: { type: Boolean, required: true, default: false },
+    otp: { type: String, minLength: 6, maxLength: 6 },
+    otpExpires: {
+      type: Date,
+      default: Date.now() + 10 * 60 * 1000,
+    },
   },
   {
     timestamps: true,
