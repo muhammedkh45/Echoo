@@ -3,6 +3,8 @@ import {
   Model,
   ProjectionType,
   RootFilterQuery,
+  UpdateQuery,
+  UpdateWriteOpResult,
 } from "mongoose";
 
 export abstract class DBRepository<TDocument> {
@@ -13,7 +15,13 @@ export abstract class DBRepository<TDocument> {
   async findOne(
     filter: RootFilterQuery<TDocument>,
     select?: ProjectionType<TDocument>
-  ): Promise<HydratedDocument<TDocument> | null > {
+  ): Promise<HydratedDocument<TDocument> | null> {
     return this.model.findOne(filter, select);
+  }
+  async updateOne(
+    filter: RootFilterQuery<TDocument>,
+    update: UpdateQuery<TDocument>
+  ): Promise<UpdateWriteOpResult> {
+    return await this.model.updateOne(filter, update);
   }
 }

@@ -44,13 +44,21 @@ export const logInSchema = {
   }),
 };
 export const confirmEmailSchema = {
+  body: z
+    .strictObject({
+      email: z.email(),
+      otp: z.string().min(6).max(6),
+    })
+    .required(),
+};
+export const logOutSchema = {
   body: z.strictObject({
-    email: z.email(),
-    otp: z.string().min(6).max(6),
+    flag: z.enum(["all", "current"]).default("current"),
   }),
 };
 export type signUpSchemaType = Partial<z.infer<typeof signUpSchema.body>>;
 export type logInSchemaType = Partial<z.infer<typeof logInSchema.body>>;
+export type logOutSchemaType = Partial<z.infer<typeof logOutSchema.body>>;
 export type confirmEmailSchemaType = Partial<
   z.infer<typeof confirmEmailSchema.body>
 >;

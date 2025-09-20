@@ -26,6 +26,7 @@ export interface IUser {
   isVerified?: boolean;
   otp?: string;
   otpExpires?: Date;
+  changeCredentials: Date;
 }
 
 const userSchema = new mongoose.Schema<IUser>(
@@ -57,6 +58,7 @@ const userSchema = new mongoose.Schema<IUser>(
       type: Date,
       default: Date.now() + 10 * 60 * 1000,
     },
+    changeCredentials: { type: Date, required: true },
   },
   {
     timestamps: true,
