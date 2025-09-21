@@ -7,3 +7,7 @@ eventEmitter.on("sendEmail", (data) => {
   const { email, OTP, subject } = data;
   sendEmail({ to: email, html: emailTemplate(OTP), subject: subject });
 });
+eventEmitter.on("forgetPassword", (data) => {
+  const { email, OTP, subject } = data;
+  sendEmail({ to: email, html: emailTemplate(OTP), subject: subject });
+});

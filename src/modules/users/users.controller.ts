@@ -7,8 +7,36 @@ import { TokenType } from "../../utils/Security/Token";
 const userRouter = Router();
 userRouter.post("/signUp", validation(UV.signUpSchema), US.signUp);
 userRouter.post("/login", validation(UV.logInSchema), US.logIn);
-userRouter.patch("/confirmEmail",validation(UV.confirmEmailSchema), US.confirmEmail);
-userRouter.get("/profile", Authentication(),US.getProfile);
-userRouter.get("/logout", Authentication(),validation(UV.logOutSchema),US.logOut);
-userRouter.get("/refreshtoken", Authentication(TokenType.refresh),US.refreshToken);
+userRouter.post(
+  "/google-login",
+  validation(UV.logInWithGoogleSchema),
+  US.loginWithGmail
+);
+userRouter.patch(
+  "/confirmEmail",
+  validation(UV.confirmEmailSchema),
+  US.confirmEmail
+);
+userRouter.patch(
+  "/forget-password",
+  validation(UV.forgetPasswordSchema),
+  US.forgetPassword
+);
+userRouter.patch(
+  "/rest-password",
+  validation(UV.resetPasswordSchema),
+  US.resetPassword
+);
+userRouter.get("/profile", Authentication(), US.getProfile);
+userRouter.get(
+  "/logout",
+  Authentication(),
+  validation(UV.logOutSchema),
+  US.logOut
+);
+userRouter.get(
+  "/refreshtoken",
+  Authentication(TokenType.refresh),
+  US.refreshToken
+);
 export default userRouter;

@@ -32,7 +32,6 @@ export const signUpSchema = {
       }
     }),
 };
-
 export const logInSchema = {
   body: z.strictObject({
     email: z.email(),
@@ -56,9 +55,52 @@ export const logOutSchema = {
     flag: z.enum(["all", "current"]).default("current"),
   }),
 };
+export const logInWithGoogleSchema = {
+  body: z
+    .strictObject({
+      token: z.string(),
+    })
+    .required(),
+};
+export const forgetPasswordSchema = {
+  body: z
+    .strictObject({
+      email: z.email(),
+    })
+    .required(),
+};
+export const resetPasswordSchema = {
+  body: confirmEmailSchema.body
+    .extend({
+      password: z
+        .string()
+        .regex(
+          /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/
+        ),
+      cPassword: z.string(),
+    })
+    .required()
+    .superRefine((data, ctx) => {
+      if (data.password !== data.cPassword) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Not matching",
+        });
+      }
+    }),
+};
 export type signUpSchemaType = Partial<z.infer<typeof signUpSchema.body>>;
 export type logInSchemaType = Partial<z.infer<typeof logInSchema.body>>;
 export type logOutSchemaType = Partial<z.infer<typeof logOutSchema.body>>;
+export type forgetPasswordSchemaType = Partial<
+  z.infer<typeof forgetPasswordSchema.body>
+>;
+export type resetPasswordSchemaType = Partial<
+  z.infer<typeof resetPasswordSchema.body>
+>;
+export type logInWithGoogleSchemaType = Partial<
+  z.infer<typeof logInWithGoogleSchema.body>
+>;
 export type confirmEmailSchemaType = Partial<
   z.infer<typeof confirmEmailSchema.body>
 >;
