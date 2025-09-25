@@ -189,7 +189,7 @@ class UserServices {
   refreshToken = async (req: Request, res: Response, next: NextFunction) => {
     const tokenId = uuid();
     const accessToken = await generateToken(
-      { id: req?.user?._id, email: req?.user?.email },
+      { id: req?.user?._id, email: req?.user?.email }, 
       req?.user?.role == RoleType.user
         ? process.env.JWT_USER_SECRET!
         : process.env.JWT_ADMIN_SECRET!,
