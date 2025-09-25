@@ -20,7 +20,7 @@ import { Compare, Hash } from "../../utils/Security/Hash";
 import { eventEmitter } from "../../utils/Events/Email.event";
 import { generateOTP } from "../../utils/Security/OTPGenerator";
 import { generateToken } from "../../utils/Security/Token";
-import { uuid } from "uuidv4";
+import { uuid} from "uuidv4";
 import { RevokeTokenRepository } from "../../DB/repositories/revokeToken.repository";
 import revokeTokenModel from "../../DB/model/revokeToken.model";
 import { OAuth2Client, TokenPayload } from "google-auth-library";
@@ -78,7 +78,7 @@ class UserServices {
       let { email, password }: logInSchemaType = req.body;
       const user = await this._userModel.findOne({
         email,
-        provider: ProviderType.system,
+        // provider: ProviderType.system,
       });
       if (!user) {
         throw new AppError("Email or Password is Invalid.", 401);
@@ -207,11 +207,11 @@ class UserServices {
     await this._revokeTokenModel.create({
       tokenId: req.decoded.jti,
       userId: req.user._id,
-      expiresAt: new Date(req.decoded.exp! * 1000),
+      expiresAt: new Date(),
     });
     return res
       .status(200)
-      .json({ message: "Logged-in Successfuly.", accessToken, refreshToken });
+      .json({ message: "Refreshed Successfuly.", accessToken, refreshToken });
   };
   loginWithGmail = async (req: Request, res: Response, next: NextFunction) => {
     try {
