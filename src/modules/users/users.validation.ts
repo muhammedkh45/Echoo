@@ -1,15 +1,13 @@
 import * as z from "zod";
 import { GenderType, RoleType } from "../../DB/model/user.model";
+import { Types } from "mongoose";
+import { generalRules } from "../../utils/generalRules";
 export const signUpSchema = {
   body: z
     .strictObject({
       userName: z.string().min(3).max(15).trim(),
-      email: z.email(),
-      password: z
-        .string()
-        .regex(
-          /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/
-        ),
+      email: generalRules.email,
+      password: generalRules.password,
       cPassword: z.string(),
       age: z.number().min(18),
       address: z
@@ -46,7 +44,7 @@ export const confirmEmailSchema = {
   body: z
     .strictObject({
       email: z.email(),
-      otp: z.string().min(6).max(6),
+      otp: generalRules.otp,
     })
     .required(),
 };
@@ -89,6 +87,22 @@ export const resetPasswordSchema = {
       }
     }),
 };
+export const freezeSchema = {
+  params: z
+    .strictObject({
+      userId: z.string().optional(),
+    })
+    .refine(
+      (value) => {
+        return value?.userId ? Types.ObjectId.isValid(value.userId) : true;
+      },
+      {
+        message: "UserId is not 24 hex",
+        path: ["freeze schema -> userId"],
+      }
+    ),
+};
+
 export type signUpSchemaType = Partial<z.infer<typeof signUpSchema.body>>;
 export type logInSchemaType = Partial<z.infer<typeof logInSchema.body>>;
 export type logOutSchemaType = Partial<z.infer<typeof logOutSchema.body>>;
@@ -104,3 +118,4 @@ export type logInWithGoogleSchemaType = Partial<
 export type confirmEmailSchemaType = Partial<
   z.infer<typeof confirmEmailSchema.body>
 >;
+export type freezeSchemaType = Partial<z.infer<typeof freezeSchema.params>>;

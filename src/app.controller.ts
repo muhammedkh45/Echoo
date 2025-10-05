@@ -6,6 +6,7 @@ import dotenv from "dotenv";
 import path from "node:path";
 import { AppError } from "./utils/classError";
 import userRouter from "./modules/users/users.controller";
+import postRouter from "./modules/posts/posts.controller";
 import connectDB from "./DB/connection.db";
 dotenv.config({ path: path.resolve("config/.env") });
 const app: express.Application = express();
@@ -27,6 +28,7 @@ const bootstrap = async () => {
     res.status(200).json({ message: "Hello World!" })
   );
   app.use("/users",userRouter)
+  app.use("/posts",postRouter)
   app.use("{/*demo}", (req: Request, res: Response) => {
     // return res
     //   .status(404)

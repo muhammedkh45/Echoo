@@ -37,6 +37,12 @@ export interface IUser {
   changeCredentials?: Date;
   image?: string;
   provider: ProviderType;
+  profileImage?: string;
+  tempProfileImage?: string;
+  deletedAt?: Date;
+  deletedBy?: Types.ObjectId;
+  restoredAt?: Date;
+  restoredBy?: Types.ObjectId;
 }
 
 const userSchema = new mongoose.Schema<IUser>(
@@ -92,6 +98,12 @@ const userSchema = new mongoose.Schema<IUser>(
       enum: ProviderType,
       default: ProviderType.system,
     },
+    profileImage: { type: String },
+    tempProfileImage: { type: String },
+    deletedAt: { types: Date },
+    deletedBy: { types: Types.ObjectId, ref: "User" },
+    restoredAt: { types: Date },
+    restoredBy: { types: Types.ObjectId, ref: "User" },
   },
   {
     timestamps: true,

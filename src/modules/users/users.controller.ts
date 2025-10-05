@@ -4,6 +4,10 @@ import * as UV from "./users.validation";
 import validation from "../../middleware/validation.middleware";
 import { Authentication } from "../../middleware/authentication.meddleware";
 import { TokenType } from "../../utils/Security/Token";
+import {
+  fileValidation,
+  multerCloud,
+} from "../../middleware/multer.middleware";
 const userRouter = Router();
 userRouter.post("/signUp", validation(UV.signUpSchema), US.signUp);
 userRouter.post("/login", validation(UV.logInSchema), US.logIn);
@@ -39,4 +43,33 @@ userRouter.get(
   Authentication(TokenType.refresh),
   US.refreshToken
 );
+userRouter.get(
+  "/upload/pre-signed/*path",
+  Authentication(),
+  US.getPreSignedFile
+);
+userRouter.get("/upload/*path", Authentication(), US.getFile);
+userRouter.get("/upload/listFiles/path", Authentication(), US.listFiles);
+userRouter.get("/upload/delete/*path", Authentication(), US.deleteFile);
+userRouter.delete("/upload/delete-files", Authentication(), US.deleteFiles);
+userRouter.post(
+  "/upload",
+  Authentication(),
+  multerCloud({ fileTypes: fileValidation.image }).single("file"),
+  US.uploadImage
+);
+userRouter.post(
+  "/upload-many",
+  Authentication(),
+  multerCloud({ fileTypes: fileValidation.image }).array("files"),
+  US.uploadImage
+);
+userRouter.post(
+  "/get-presigned-url",
+  Authentication(),
+  multerCloud({ fileTypes: fileValidation.image }).single("file"),
+  US.presignedUrl
+);
+userRouter.patch("/freeze{/:userId}",validation(UV.freezeSchema),Authentication(),US.freezeAccount)
+userRouter.patch("/unfreeze/:userId",validation(UV.freezeSchema),Authentication(),US.unfreezeAccount)
 export default userRouter;

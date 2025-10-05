@@ -9,6 +9,7 @@ import { HydratedDocument } from "mongoose";
 import {
   confirmEmailSchemaType,
   forgetPasswordSchemaType,
+  freezeSchemaType,
   logInSchemaType,
   logInWithGoogleSchemaType,
   logOutSchemaType,
@@ -20,10 +21,24 @@ import { Compare, Hash } from "../../utils/Security/Hash";
 import { eventEmitter } from "../../utils/Events/Email.event";
 import { generateOTP } from "../../utils/Security/OTPGenerator";
 import { generateToken } from "../../utils/Security/Token";
-import { uuid} from "uuidv4";
+import { uuid } from "uuidv4";
 import { RevokeTokenRepository } from "../../DB/repositories/revokeToken.repository";
 import revokeTokenModel from "../../DB/model/revokeToken.model";
 import { OAuth2Client, TokenPayload } from "google-auth-library";
+import { multerCloud } from "../../middleware/multer.middleware";
+import {
+  createPresignedUrl,
+  deleteFile,
+  deleteFiles,
+  getFile,
+  getFilePreSignedUrl,
+  listFiles,
+  uploadFile,
+  uploadFiles,
+  uploadLargeFile,
+} from "../../utils/s3.config";
+import { promisify } from "node:util";
+import { pipeline } from "node:stream";
 class UserServices {
   private _userModel = new UserRepository(userModel);
   private _revokeTokenModel = new RevokeTokenRepository(revokeTokenModel);
@@ -189,7 +204,7 @@ class UserServices {
   refreshToken = async (req: Request, res: Response, next: NextFunction) => {
     const tokenId = uuid();
     const accessToken = await generateToken(
-      { id: req?.user?._id, email: req?.user?.email }, 
+      { id: req?.user?._id, email: req?.user?.email },
       req?.user?.role == RoleType.user
         ? process.env.JWT_USER_SECRET!
         : process.env.JWT_ADMIN_SECRET!,
@@ -325,6 +340,186 @@ class UserServices {
         (error as unknown as any).statusCode
       );
     }
+  };
+  uploadImage = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { ContentType, originalname } = req.body;
+      const { url, Key } = await createPresignedUrl({
+        ContentType,
+        originalname,
+        path: `users/${req.user?._id}/coverimage`,
+      });
+      const user = await this._userModel.findOneAndUpdate(
+        { _id: req.user._id },
+        { profileImage: Key, tempProfileImage: req.user?.profileImage }
+      );
+      if (!user) {
+        throw new AppError("User not found", 404);
+      }
+      eventEmitter.emit("uploadImage", {
+        userId: req.user?._id,
+        oldKey: req.user?.profileImage,
+        Key,
+        expiresIn: 60,
+      });
+      return res.status(200).json({ message: "Success", url, user });
+    } catch (error) {
+      throw new AppError(
+        (error as unknown as any).message,
+        (error as unknown as any).statusCode
+      );
+    }
+  };
+  uploadImages = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const key = await uploadFiles({
+        files: req.files as Express.Multer.File[],
+        path: `users/${req.user._id}`,
+      });
+      return res.status(200).json({ message: "Success", key });
+    } catch (error) {
+      throw new AppError(
+        (error as unknown as any).message,
+        (error as unknown as any).statusCode
+      );
+    }
+  };
+  presignedUrl = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { originalname, ContentType } = req.body;
+      const url = await createPresignedUrl({
+        originalname,
+        ContentType,
+        path: `users/${req.user._id}`,
+      });
+      return res.status(200).json({ message: "success", url });
+    } catch (error) {
+      throw new AppError(
+        (error as unknown as any).message,
+        (error as unknown as any).statusCode
+      );
+    }
+  };
+
+  getFile = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const writePipeLine = promisify(pipeline);
+      const { path } = req.params as unknown as { path: string[] };
+      const { downloadName } = req.query as { downloadName: string };
+      const key = path.join("/");
+      const file = await getFile({ Key: key });
+      const stream = file.Body as NodeJS.ReadableStream;
+      res.setHeader("Content-Type", file?.ContentType!);
+      writePipeLine(stream, res);
+      if (downloadName) {
+        res.setHeader(
+          "Content-Desposition",
+          `attachment; filename="${
+            downloadName || path.join("/").split("/").pop()
+          }"`
+        );
+      }
+    } catch (error) {
+      throw new AppError(
+        (error as unknown as any).message,
+        (error as unknown as any).statusCode
+      );
+    }
+  };
+  getPreSignedFile = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) => {
+    try {
+      const { path } = req.params as unknown as { path: string[] };
+      const key = path.join("/");
+      const url = await getFilePreSignedUrl({ Key: key });
+      res.status(200).json({ messgae: "Done", url });
+    } catch (error) {
+      throw new AppError(
+        (error as unknown as any).message,
+        (error as unknown as any).statusCode
+      );
+    }
+  };
+  deleteFile = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { path } = req.params as unknown as { path: string[] };
+      const key = path.join("/");
+      const file = await deleteFile({ Key: key });
+      return res.status(200).json({ messgae: "Success", file });
+    } catch (error) {
+      throw new AppError(
+        (error as unknown as any).message,
+        (error as unknown as any).statusCode
+      );
+    }
+  };
+  deleteFiles = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { Keys } = req.body;
+      const files = await deleteFiles({ Keys });
+      return res.status(200).json({ messgae: "Success", files });
+    } catch (error) {
+      throw new AppError(
+        (error as unknown as any).message,
+        (error as unknown as any).statusCode
+      );
+    }
+  };
+  listFiles = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { path } = req.params as { path: string };
+      const files = await listFiles({ path });
+      return res.status(200).json({ message: "Success", files });
+    } catch (error) {
+      throw new AppError(
+        (error as unknown as any).message,
+        (error as unknown as any).statusCode
+      );
+    }
+  };
+  freezeAccount = async (req: Request, res: Response, next: NextFunction) => {
+    const { userId }: freezeSchemaType = req.params;
+    if (userId && req.user?.role !== RoleType.admin) {
+      throw new AppError("UnAuthorized", 401);
+    }
+    const user = await this._userModel.findOneAndUpdate(
+      { _id: userId || req.user?._id, deletedAt: { $exists: false } },
+      {
+        deletedAt: new Date(),
+        deletedBy: req.user?._id,
+        changeCredentials: new Date(),
+      }
+    );
+    if (!user) {
+      throw new AppError("User not found.", 404);
+    }
+    return res.status(200).json({ message: "Freezed" });
+  };
+
+  unfreezeAccount = async (req: Request, res: Response, next: NextFunction) => {
+    const { userId }: freezeSchemaType = req.params;
+    if (req.user?.role !== RoleType.admin) {
+      throw new AppError("UnAuthorized", 401);
+    }
+    const user = await this._userModel.findOneAndUpdate(
+      {
+        _id: userId || req.user?._id,
+        deletedAt: { $exists: true },
+        deletedBy: { $ne: req.user?._id },
+      },
+      {
+        restoredAt: new Date(),
+        restoredBy: req.user?._id,
+        $unset: { deletedAt: "", deletedBy: "" },
+      }
+    );
+    if (!user) {
+      throw new AppError("User not found.", 404);
+    }
+    return res.status(200).json({ message: "Freezed" });
   };
 }
 

@@ -1,9 +1,8 @@
-import { HydratedDocument, Model, RootFilterQuery } from "mongoose";
+import { HydratedDocument, Model} from "mongoose";
 import { DBRepository } from "./db.repository";
 import { IUser } from "../model/user.model";
 import { AppError } from "../../utils/classError";
-import { ProjectionType } from "mongoose";
-import { overwrite } from "zod";
+
 
 export class UserRepository extends DBRepository<IUser> {
   constructor(protected readonly model: Model<IUser>) {
