@@ -43,6 +43,7 @@ export interface IUser {
   deletedBy?: Types.ObjectId;
   restoredAt?: Date;
   restoredBy?: Types.ObjectId;
+  friends?: Types.ObjectId[];
 }
 
 const userSchema = new mongoose.Schema<IUser>(
@@ -104,6 +105,7 @@ const userSchema = new mongoose.Schema<IUser>(
     deletedBy: { types: Types.ObjectId, ref: "User" },
     restoredAt: { types: Date },
     restoredBy: { types: Types.ObjectId, ref: "User" },
+    friends: [{ type: Types.ObjectId, ref: "User" }],
   },
   {
     timestamps: true,

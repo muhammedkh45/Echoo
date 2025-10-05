@@ -1,5 +1,5 @@
 import { NextFunction, Request, Response } from "express";
-import postModel, { IPost } from "../../DB/model/post.model";
+import postModel, { AvailabilityEnum, IPost } from "../../DB/model/post.model";
 import { PostRepository } from "../../DB/repositories/post.repository";
 import userModel from "../../DB/model/user.model";
 import { UserRepository } from "../../DB/repositories/user.repository";
@@ -10,6 +10,7 @@ import {
   ActionEnum,
   likePostQueryDTO,
   PostLikeSchemaType,
+  updatePostParamsDTO,
 } from "./posts.validation";
 import { UpdateQuery } from "mongoose";
 
@@ -58,19 +59,79 @@ class PostServices {
     try {
       const { postId }: PostLikeSchemaType = req.params;
       const { action }: likePostQueryDTO = req.query;
-      let updateQuery: UpdateQuery<IPost> = { $addToSet: { likes: req.user?._id } };
+      let updateQuery: UpdateQuery<IPost> = {
+        $addToSet: { likes: req.user?._id },
+      };
       if (action === ActionEnum.unlike) {
         updateQuery = { $pull: { likes: req.user?._id } };
       }
       const post = await this._postModel.findOneAndUpdate(
-        { id: postId },
-        { ...updateQuery }, 
+        {
+          id: postId,
+          $or: [
+            { availability: AvailabilityEnum.public },
+            {
+              availability: AvailabilityEnum.private,
+              createdBy: req.user?._id,
+            },
+            {
+              availability: AvailabilityEnum.friends,
+              createdBy: { $in: [...(req.user?.friends || []), req.user?._id] },
+            },
+          ],
+        },
+        { ...updateQuery },
         { new: true }
       );
       if (!post) {
         throw new AppError(`Faild to ${action} post`, 404);
       }
       return res.status(201).json({ message: `${action} successfully`, post });
+    } catch (error) {
+      throw new AppError(
+        (error as unknown as any).message,
+        (error as unknown as any).statusCode
+      );
+    }
+  };
+  updatePost = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { postId }: updatePostParamsDTO = req.params;
+      const post = await this._postModel.findOne({ id: postId });
+      if (!post) {
+        throw new AppError("Not Found", 404);
+      }
+      if (post && req.user?._id !== post.createdBy) {
+        throw new AppError("Unauthorized", 401);
+      }
+      if (req?.body?.content) {
+        post.content = req.body.content;
+      }
+      if (req?.body?.availability) {
+        post.availability = req.body.availability;
+      }
+      if (req?.body?.allowComment) {
+        post.allowComment = req.body.allowComment;
+      }
+      if (req?.files?.length) {
+        await deleteFiles({ Keys: post.attachments! });
+        post.attachments = await uploadFiles({
+          files: req?.files as unknown as Express.Multer.File[],
+          path: `users/${req.user?._id}/posts/${post.assetFolderId}`,
+        });
+      }
+      if (req.body.tags.length) {
+        if (
+          req.body.tags?.length &&
+          (await this._userModel.find({ _id: { $in: req.body.tags } }))
+            .length !== req.body.tags?.length
+        ) {
+          throw new AppError("InValid User ID ");
+        }
+        post.tags = req.body.tags;
+      }
+      await post.save();
+      return res.status(200).json({ message: "Updated", post });
     } catch (error) {
       throw new AppError(
         (error as unknown as any).message,

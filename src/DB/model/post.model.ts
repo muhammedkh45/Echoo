@@ -62,8 +62,19 @@ export const postSchema = new Schema<IPost>(
     toObject: {
       virtuals: true,
     },
+    strictQuery: true,
   }
 );
 
+postSchema.pre(["findOne", "find"], function (next) {
+  const query = this.getQuery();
+  const { paranoid, ...rest } = query;
+  if (paranoid === false) {
+    this.setQuery({ ...rest });
+  } else {
+    this.setQuery({ ...rest, deletedAt: { $exists: false } });
+  }
+  next();
+});
 const postModel = mongoose.models.Post || mongoose.model("Post", postSchema);
 export default postModel;

@@ -16,9 +16,16 @@ postRouter.post(
   PS.createPost
 );
 postRouter.patch(
-  "/:postId/action", 
+  "/:postId/action",
   Authentication(),
   validation(PV.postLikeSchema),
   PS.likePost
+);
+postRouter.patch(
+  "/update/:postId",
+  Authentication(),
+  multerCloud({ fileTypes: fileValidation.image }).array("attachments", 2),
+  validation(PV.updatePostSchema),
+  PS.updatePost
 );
 export default postRouter;
