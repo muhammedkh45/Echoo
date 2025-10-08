@@ -13,6 +13,7 @@ import {
   updatePostParamsDTO,
 } from "./posts.validation";
 import { UpdateQuery } from "mongoose";
+import { eventEmitter } from "../../utils/Events/Email.event";
 
 class PostServices {
   private _postModel = new PostRepository(postModel);
@@ -23,11 +24,15 @@ class PostServices {
     try {
       if (
         req.body.tags?.length &&
-        (await this._userModel.find({ _id: { $in: req.body.tags } })).length !==
-          req.body.tags?.length
+        (
+          await this._userModel.find({
+            filter: { _id: { $in: req.body.tags } },
+          })
+        ).length !== req.body.tags?.length
       ) {
         throw new AppError("InValid User ID ");
       }
+      
       const assetFolderId = uuid();
       let attachments: string[] = [];
       if (req.files?.length) {
@@ -47,6 +52,13 @@ class PostServices {
         deleteFiles({ Keys: attachments });
         throw new AppError("Failed to create post", 500);
       }
+      req.body.tags.forEach((tag:string ) => {
+        eventEmitter.emit("sendEmailToTagged", {
+          email: tag,
+          link:post._id,
+          subject: `${req.user.email} mentioned you in there post`,
+        });
+      });
       return res.status(201).json({ message: "Created successfully", post });
     } catch (error) {
       throw new AppError(
@@ -123,8 +135,11 @@ class PostServices {
       if (req.body.tags.length) {
         if (
           req.body.tags?.length &&
-          (await this._userModel.find({ _id: { $in: req.body.tags } }))
-            .length !== req.body.tags?.length
+          (
+            await this._userModel.find({
+              filter: { _id: { $in: req.body.tags } },
+            })
+          ).length !== req.body.tags?.length
         ) {
           throw new AppError("InValid User ID ");
         }
@@ -132,6 +147,61 @@ class PostServices {
       }
       await post.save();
       return res.status(200).json({ message: "Updated", post });
+    } catch (error) {
+      throw new AppError(
+        (error as unknown as any).message,
+        (error as unknown as any).statusCode
+      );
+    }
+  };
+  getPosts = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      let { page = 1, limit = 5 } = req.query as unknown as {
+        page: number;
+        limit: number;
+      };
+      const posts = await this._postModel.paginate({
+        filter: {},
+        query: { page, limit },
+      });
+      return res.status(200).json({ Message: "Success", posts });
+    } catch (error) {
+      throw new AppError(
+        (error as unknown as any).message,
+        (error as unknown as any).statusCode
+      );
+    }
+  };
+  getPostsWithComments = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) => {
+    try {
+      let { page = 1, limit = 5 } = req.query as unknown as {
+        page: number;
+        limit: number;
+      };
+      const posts = await this._postModel.paginate({
+        filter: {},
+        query: { page, limit },
+        options: {
+          populate: [
+            {
+              path: "comments",
+              match: {
+                commentId: {
+                  $exists: false,
+                },
+              },
+              populate: {
+                path: "replies",
+              },
+            },
+          ],
+        },
+      });
+      return res.status(200).json({ Message: "Success", posts });
     } catch (error) {
       throw new AppError(
         (error as unknown as any).message,

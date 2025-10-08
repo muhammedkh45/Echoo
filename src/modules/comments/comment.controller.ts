@@ -1,34 +1,33 @@
 import { Router } from "express";
 import validation from "../../middleware/validation.middleware";
-import * as PV from "./posts.validation";
-import PS from "./posts.services";
+import * as CV from "./comment.validation";
+import CS from "./comment.services";
 import { Authentication } from "../../middleware/authentication.meddleware";
 import {
   fileValidation,
   multerCloud,
 } from "../../middleware/multer.middleware";
-import commentRouter from "../comments/comment.controller";
-const postRouter = Router();
-postRouter.use("/:postId/comments{/:commentId/reply}", commentRouter);
-postRouter.post(
-  "/create",
+const commentRouter = Router({mergeParams:true});
+commentRouter.post(
+  "/",
   Authentication(),
   multerCloud({ fileTypes: fileValidation.image }).array("attachments", 2),
-  validation(PV.createPostSchema),
-  PS.createPost
+  validation(CV.createCommentSchema),
+  CS.createComment
 );
-postRouter.patch(
+commentRouter.patch(
   "/:postId/action",
   Authentication(),
-  validation(PV.postLikeSchema),
-  PS.likePost
+  validation(CV.commentLikeSchema),
+  CS.likeComment
 );
-postRouter.patch(
+commentRouter.patch(
   "/update/:postId",
   Authentication(),
   multerCloud({ fileTypes: fileValidation.image }).array("attachments", 2),
-  validation(PV.updatePostSchema),
-  PS.updatePost
+  validation(CV.updateCommentSchema),
+  CS.updateComment
 );
-postRouter.get("/", PS.getPosts);
-export default postRouter;
+export default commentRouter;
+
+//localhost:3000/posts/:postId/comments

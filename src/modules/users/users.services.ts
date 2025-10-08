@@ -15,6 +15,7 @@ import {
   logOutSchemaType,
   resetPasswordSchemaType,
   signUpSchemaType,
+  updateProfileSchemaType,
 } from "./users.validation";
 import { UserRepository } from "../../DB/repositories/user.repository";
 import { Compare, Hash } from "../../utils/Security/Hash";
@@ -39,8 +40,18 @@ import {
 } from "../../utils/s3.config";
 import { promisify } from "node:util";
 import { pipeline } from "node:stream";
+import { PostRepository } from "../../DB/repositories/post.repository";
+import postModel from "../../DB/model/post.model";
+import { FriendRequestRepository } from "../../DB/repositories/friendRequest.repository";
+import friendRequestModel, {
+  FriendRequestEnum,
+} from "../../DB/model/friendRequest.model";
+import { Types } from "mongoose";
+import { compare } from "bcrypt";
 class UserServices {
   private _userModel = new UserRepository(userModel);
+  private _postModel = new PostRepository(postModel);
+  private _friendRequestModel = new FriendRequestRepository(friendRequestModel);
   private _revokeTokenModel = new RevokeTokenRepository(revokeTokenModel);
   constructor() {}
   signUp = async (req: Request, res: Response, next: NextFunction) => {
@@ -106,6 +117,69 @@ class UserServices {
       if (!user.isVerified) {
         throw new AppError("Please verify your email before login", 403);
       }
+      if (user.isTwoFactorEnable) {
+        const OTP = await generateOTP();
+        const hashedOTP = await Hash(OTP, Number(process.env.SALT_ROUNDS));
+        await this._userModel.updateOne(
+          { email },
+          { otp: hashedOTP, otpExpires: new Date(Date.now() + 10 * 60 * 1000) }
+        );
+        eventEmitter.emit("sendEmail", {
+          email,
+          OTP,
+          subject: "Your login OTP",
+        });
+        return res.status(200).json({
+          message: "OTP sent to your email. Please confirm to complete login.",
+        });
+      }
+      const tokenId = uuid();
+      const accessToken = await generateToken(
+        { id: user._id, email: user.email },
+        user?.role == RoleType.user
+          ? process.env.JWT_USER_SECRET!
+          : process.env.JWT_ADMIN_SECRET!,
+        { expiresIn: "1h", jwtid: tokenId }
+      );
+      const refreshToken = await generateToken(
+        { id: user._id, email: user.email },
+        user?.role == RoleType.user
+          ? process.env.JWT_USER_SECRET_REFRESH!
+          : process.env.JWT_ADMIN_SECRET_REFRESH!,
+        {
+          jwtid: tokenId,
+        }
+      );
+      return res
+        .status(200)
+        .json({ message: "Logged-in Successfuly.", accessToken, refreshToken });
+    } catch (error) {
+      throw new AppError(
+        (error as unknown as any).message,
+        (error as unknown as any).statusCode
+      );
+    }
+  };
+  confirmLogIn = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      let { email, otp } = req.body;
+      const user = await this._userModel.findOne({
+        email,
+      });
+      if (!user) {
+        throw new AppError("Email or otp is Invalid.", 401);
+      }
+      const match = await Compare(otp, user.otp!);
+      if (!match) {
+        throw new AppError("Email or otp is Invalid.", 401);
+      }
+      if (!user.isVerified) {
+        throw new AppError("Please verify your email before login", 403);
+      }
+      await this._userModel.updateOne(
+        { _i: user._id },
+        { $unset: { otp: "", otpExpires: "" } }
+      );
       const tokenId = uuid();
       const accessToken = await generateToken(
         { id: user._id, email: user.email },
@@ -341,6 +415,121 @@ class UserServices {
       );
     }
   };
+  updatePassword = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { oldPassword, newPassword } = req.body;
+      if (!Compare(oldPassword, req.user.password)) {
+        throw new Error("password not correct", { cause: 401 });
+      }
+      req.user.password = await Hash(
+        newPassword,
+        process.env.SALT_ROUNDS as unknown as number
+      );
+      await req.user.save();
+      return res.status(200).json({ message: "password updated Successfully" });
+    } catch (error) {
+      throw new AppError(
+        (error as unknown as any).message,
+        (error as unknown as any).statusCode
+      );
+    }
+  };
+  updateProfile = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { userName, gender, phone, address, age }: updateProfileSchemaType =
+        req.body;
+      if (userName) req.user.userName = userName;
+      if (gender) req.user.gender = gender;
+      if (age) req.user.age = age;
+      if (phone) req.user.phone = phone;
+      await req.user.save();
+      res.status(200).json({ message: "Success" });
+    } catch (error) {
+      throw new AppError(
+        (error as unknown as any).message,
+        (error as unknown as any).statusCode
+      );
+    }
+  };
+  updateEmail = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { newEmail, password } = req.body;
+
+      if (await this._userModel.findOne({ email: newEmail })) {
+        throw new AppError("Email already exists", 409);
+      }
+
+      const isValidPassword = await Compare(password, req.user.password);
+      if (!isValidPassword) {
+        throw new AppError("Invalid password", 401);
+      }
+
+      const OTP = await generateOTP();
+      const hashedOTP = await Hash(OTP, Number(process.env.SALT_ROUNDS));
+
+      await this._userModel.updateOne(
+        { _id: req.user._id },
+        {
+          tempEmail: newEmail,
+          otp: hashedOTP,
+          otpExpires: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes expiry
+        }
+      );
+
+      eventEmitter.emit("sendEmail", {
+        email: newEmail,
+        OTP,
+        subject: "Verify New Email Address",
+      });
+
+      return res.status(200).json({
+        message:
+          "Verification code sent to new email address. Please verify to complete the email update.",
+      });
+    } catch (error) {
+      throw new AppError(
+        (error as unknown as any).message,
+        (error as unknown as any).statusCode
+      );
+    }
+  };
+
+  verifyNewEmail = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { otp } = req.body;
+      const user = await this._userModel.findOne({
+        _id: req.user._id,
+        tempEmail: { $exists: true },
+        otp: { $exists: true },
+      });
+      if (!user || !user.otp || !user.tempEmail) {
+        throw new AppError("No pending email update found", 404);
+      }
+      const isValidOTP = await Compare(otp as string, user.otp);
+      if (!isValidOTP) {
+        throw new AppError("Invalid verification code", 401);
+      }
+      if (user.otpExpires && user.otpExpires < new Date()) {
+        throw new AppError("Verification code has expired", 400);
+      }
+      await this._userModel.updateOne(
+        { _id: user._id },
+        {
+          email: user.tempEmail,
+          $unset: { tempEmail: "", otp: "", otpExpires: "" },
+        }
+      );
+
+      return res.status(200).json({
+        message: "Email updated successfully",
+      });
+    } catch (error) {
+      throw new AppError(
+        (error as unknown as any).message,
+        (error as unknown as any).statusCode
+      );
+    }
+  };
   uploadImage = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { ContentType, originalname } = req.body;
@@ -481,45 +670,222 @@ class UserServices {
     }
   };
   freezeAccount = async (req: Request, res: Response, next: NextFunction) => {
-    const { userId }: freezeSchemaType = req.params;
-    if (userId && req.user?.role !== RoleType.admin) {
-      throw new AppError("UnAuthorized", 401);
-    }
-    const user = await this._userModel.findOneAndUpdate(
-      { _id: userId || req.user?._id, deletedAt: { $exists: false } },
-      {
-        deletedAt: new Date(),
-        deletedBy: req.user?._id,
-        changeCredentials: new Date(),
+    try {
+      const { userId }: freezeSchemaType = req.params;
+      if (userId && req.user?.role !== RoleType.admin) {
+        throw new AppError("UnAuthorized", 401);
       }
-    );
-    if (!user) {
-      throw new AppError("User not found.", 404);
+      const user = await this._userModel.findOneAndUpdate(
+        { _id: userId || req.user?._id, deletedAt: { $exists: false } },
+        {
+          deletedAt: new Date(),
+          deletedBy: req.user?._id,
+          changeCredentials: new Date(),
+        }
+      );
+      if (!user) {
+        throw new AppError("User not found.", 404);
+      }
+      return res.status(200).json({ message: "Freezed" });
+    } catch (error) {
+      throw new AppError(
+        (error as unknown as any).message,
+        (error as unknown as any).statusCode
+      );
     }
-    return res.status(200).json({ message: "Freezed" });
   };
 
   unfreezeAccount = async (req: Request, res: Response, next: NextFunction) => {
-    const { userId }: freezeSchemaType = req.params;
-    if (req.user?.role !== RoleType.admin) {
-      throw new AppError("UnAuthorized", 401);
-    }
-    const user = await this._userModel.findOneAndUpdate(
-      {
-        _id: userId || req.user?._id,
-        deletedAt: { $exists: true },
-        deletedBy: { $ne: req.user?._id },
-      },
-      {
-        restoredAt: new Date(),
-        restoredBy: req.user?._id,
-        $unset: { deletedAt: "", deletedBy: "" },
+    try {
+      const { userId }: freezeSchemaType = req.params;
+      if (req.user?.role !== RoleType.admin) {
+        throw new AppError("UnAuthorized", 401);
       }
-    );
-    if (!user) {
-      throw new AppError("User not found.", 404);
+      const user = await this._userModel.findOneAndUpdate(
+        {
+          _id: userId || req.user?._id,
+          deletedAt: { $exists: true },
+          deletedBy: { $ne: req.user?._id },
+        },
+        {
+          restoredAt: new Date(),
+          restoredBy: req.user?._id,
+          $unset: { deletedAt: "", deletedBy: "" },
+        }
+      );
+      if (!user) {
+        throw new AppError("User not found.", 404);
+      }
+      return res.status(200).json({ message: "Freezed" });
+    } catch (error) {
+      throw new AppError(
+        (error as unknown as any).message,
+        (error as unknown as any).statusCode
+      );
     }
-    return res.status(200).json({ message: "Freezed" });
+  };
+
+  dashBoard = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const results = await Promise.allSettled([
+        this._userModel.find({ filter: {} }),
+        this._postModel.find({ filter: {} }),
+      ]);
+      return res.status(200).json({ message: "", results });
+    } catch (error) {
+      throw new AppError(
+        (error as unknown as any).message,
+        (error as unknown as any).statusCode
+      );
+    }
+  };
+  updateRole = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { userId } = req.params;
+      const { role: newRole } = req.body;
+      const denyRoles: RoleType[] = [newRole, RoleType.superAdmin];
+      if (req.user?.role == RoleType.admin) {
+        denyRoles.push(RoleType.admin);
+        if (newRole == RoleType.superAdmin) {
+          throw new AppError("unAauthorized", 401);
+        }
+      }
+      const user = await this._userModel.findOneAndUpdate(
+        { _id: userId, role: { $nin: denyRoles } },
+        { role: newRole },
+        { new: true }
+      );
+      if (!user) {
+        throw new AppError("User not found", 404);
+      }
+      return res.status(200).json({ message: "Success", user });
+    } catch (error) {
+      throw new AppError(
+        (error as unknown as any).message,
+        (error as unknown as any).statusCode
+      );
+    }
+  };
+  sendRequest = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { userId } = req.params as unknown as { userId: Types.ObjectId };
+      if (userId == req.user?._id) {
+        throw new AppError("you can not send request to yourself", 400);
+      }
+      const user = await this._userModel.findOne({ _id: userId });
+      if (!user) {
+        throw new AppError("User not found", 404);
+      }
+      const checkRequest = await this._friendRequestModel.findOne({
+        $or: [
+          { createdBy: req.user?._id, sendTo: userId },
+          { createdBy: userId, sendTo: req.user?._id },
+        ],
+      });
+      if (checkRequest) {
+        return res
+          .status(400)
+          .json({ message: "Request is already made before", status: 400 });
+      }
+      const friendRequest = await this._friendRequestModel.create({
+        createdBy: req.user?._id,
+        sendTo: userId,
+        status: FriendRequestEnum.pending,
+      });
+      return res
+        .status(200)
+        .json({ message: "Friend request send successfully", friendRequest });
+    } catch (error) {
+      throw new AppError(
+        (error as unknown as any).message,
+        (error as unknown as any).statusCode
+      );
+    }
+  };
+  actionOnRequest = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { requestId } = req.params;
+      const { action } = req.query;
+      const request = await this._friendRequestModel.findOneAndUpdate(
+        {
+          _id: requestId,
+          sendTo: req.user?._id,
+        },
+        { acceptedAt: new Date(), status: action },
+        { new: true }
+      );
+      if (!request) {
+        throw new AppError("Request not found", 404);
+      }
+      return res
+        .status(200)
+        .json({ message: `Friend request ${action} successfully`, request });
+    } catch (error) {
+      throw new AppError(
+        (error as unknown as any).message,
+        (error as unknown as any).statusCode
+      );
+    }
+  };
+  enable2FARequest = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) => {
+    try {
+      const OTP = await generateOTP();
+      const hashedOTP = await Hash(OTP, Number(process.env.SALT_ROUNDS));
+      eventEmitter.emit("sendEmail", {
+        email: req.user.email,
+        OTP,
+        subject: "Enable  2FA",
+      });
+      await this._userModel.updateOne(
+        { email: req.user.email },
+        { otp: hashedOTP, otpExpires: new Date(Date.now() + 10 * 60 * 1000) }
+      );
+      return res
+        .status(200)
+        .json({ message: "OTP have been sent Successfully." });
+    } catch (error) {
+      throw new AppError(
+        (error as unknown as any).message,
+        (error as unknown as any).statusCode
+      );
+    }
+  };
+  enable2FAConfirm = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) => {
+    try {
+      const { otp } = req.body;
+      const user = await this._userModel.findOne({
+        _id: req.user._id,
+        otp: { $exists: true },
+      });
+      if (!user || !user.otp) {
+        throw new AppError("Need to enable 2FA First", 401);
+      }
+      const isValidOTP = await Compare(otp, user.otp!);
+      if (!isValidOTP) {
+        throw new AppError("Invalid verification code", 401);
+      }
+      if (user.otpExpires && user.otpExpires < new Date()) {
+        throw new AppError("Verification code has expired", 400);
+      }
+      user.isTwoFactorEnable = true;
+      await user.save();
+      return res
+        .status(200)
+        .json({ message: " 2-Step Verification enabled successfully!" });
+    } catch (error) {
+      throw new AppError(
+        (error as unknown as any).message,
+        (error as unknown as any).statusCode
+      );
+    }
   };
 }
 

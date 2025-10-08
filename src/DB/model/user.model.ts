@@ -12,6 +12,7 @@ export enum GenderType {
 export enum RoleType {
   user = "user",
   admin = "admin",
+  superAdmin = "superAdmin",
 }
 export enum ProviderType {
   system = "system",
@@ -23,6 +24,7 @@ export interface IUser {
   lName: string;
   userName?: string;
   email: string;
+  tempEmail?: string;
   password: string;
   age: number;
   address?: string;
@@ -44,6 +46,7 @@ export interface IUser {
   restoredAt?: Date;
   restoredBy?: Types.ObjectId;
   friends?: Types.ObjectId[];
+  isTwoFactorEnable?: boolean;
 }
 
 const userSchema = new mongoose.Schema<IUser>(
@@ -63,6 +66,7 @@ const userSchema = new mongoose.Schema<IUser>(
       trim: true,
     },
     email: { type: String, required: true, unique: true, trim: true },
+    tempEmail: { type: String, unique: true, trim: true },
     password: {
       type: String,
       required: function () {
@@ -106,6 +110,7 @@ const userSchema = new mongoose.Schema<IUser>(
     restoredAt: { types: Date },
     restoredBy: { types: Types.ObjectId, ref: "User" },
     friends: [{ type: Types.ObjectId, ref: "User" }],
+    isTwoFactorEnable: { type: Boolean, default: false },
   },
   {
     timestamps: true,

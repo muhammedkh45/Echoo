@@ -76,5 +76,10 @@ postSchema.pre(["findOne", "find"], function (next) {
   }
   next();
 });
+postSchema.virtual("comments",{
+  ref:"Comment",
+  localField:"_id",
+  foreignField:"postId"
+})
 const postModel = mongoose.models.Post || mongoose.model("Post", postSchema);
 export default postModel;

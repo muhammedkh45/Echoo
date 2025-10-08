@@ -8,6 +8,8 @@ import {
   fileValidation,
   multerCloud,
 } from "../../middleware/multer.middleware";
+import { Authorization } from "../../middleware/authorization.middleware";
+import { RoleType } from "../../DB/model/user.model";
 const userRouter = Router();
 userRouter.post("/signUp", validation(UV.signUpSchema), US.signUp);
 userRouter.post("/login", validation(UV.logInSchema), US.logIn);
@@ -20,6 +22,11 @@ userRouter.patch(
   "/confirmEmail",
   validation(UV.confirmEmailSchema),
   US.confirmEmail
+);
+userRouter.patch(
+  "/confirmNewEmail",
+  validation(UV.confirmEmailSchema),
+  US.verifyNewEmail
 );
 userRouter.patch(
   "/forget-password",
@@ -70,6 +77,65 @@ userRouter.post(
   multerCloud({ fileTypes: fileValidation.image }).single("file"),
   US.presignedUrl
 );
-userRouter.patch("/freeze{/:userId}",validation(UV.freezeSchema),Authentication(),US.freezeAccount)
-userRouter.patch("/unfreeze/:userId",validation(UV.freezeSchema),Authentication(),US.unfreezeAccount)
+userRouter.patch(
+  "/freeze{/:userId}",
+  validation(UV.freezeSchema),
+  Authentication(),
+  US.freezeAccount
+);
+userRouter.patch(
+  "/unfreeze/:userId",
+  validation(UV.freezeSchema),
+  Authentication(),
+  US.unfreezeAccount
+);
+userRouter.get(
+  "/dashboard",
+  Authentication(),
+  Authorization({ accessRoles: [RoleType.admin, RoleType.superAdmin] }),
+  US.dashBoard
+);
+userRouter.patch(
+  "/changeRole/:userId",
+  Authentication(),
+  Authorization({ accessRoles: [RoleType.admin, RoleType.superAdmin] }),
+  US.updateRole
+);
+userRouter.post("/sendRequest/:userId", Authentication(), US.sendRequest);
+userRouter.patch(
+  "/actionRequest/:requestId?action=",
+  Authentication(),
+  validation(UV.actionOnReqSchema),
+  US.actionOnRequest
+);
+userRouter.patch(
+  "/updatePassword",
+  Authentication(),
+  validation(UV.updatePasswordSchema),
+  US.updatePassword
+);
+userRouter.patch(
+  "/updateProfile",
+  Authentication(),
+  validation(UV.updatePasswordSchema),
+  US.updateProfile
+);
+userRouter.patch(
+  "/updateEmail",
+  Authentication(),
+  validation(UV.updateEmailSchema),
+  US.updateEmail
+);
+userRouter.patch("/enable-2fa-request", Authentication(), US.enable2FARequest);
+userRouter.patch(
+  "/enable-2fa-confirm",
+  Authentication(),
+  validation(UV.confirmNewEmailSchema),
+  US.enable2FAConfirm
+);
+userRouter.patch(
+  "/login-confirm",
+  validation(UV.confirmEmailSchema),
+  US.confirmLogIn
+);
 export default userRouter;
