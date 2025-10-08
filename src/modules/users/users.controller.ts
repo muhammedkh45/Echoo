@@ -11,6 +11,18 @@ import {
 import { Authorization } from "../../middleware/authorization.middleware";
 import { RoleType } from "../../DB/model/user.model";
 const userRouter = Router();
+userRouter.patch(
+  "/unfriend/:userId",
+  Authentication,
+  validation(UV.freezeSchema),
+  US.unfriendUser
+);
+userRouter.patch(
+  "/block/:userId",
+  Authentication,
+  validation(UV.freezeSchema),
+  US.blockUser
+);
 userRouter.post("/signUp", validation(UV.signUpSchema), US.signUp);
 userRouter.post("/login", validation(UV.logInSchema), US.logIn);
 userRouter.post(

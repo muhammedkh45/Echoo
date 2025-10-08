@@ -1,23 +1,27 @@
 import { NextFunction, Request, Response } from "express";
 import postModel, { AvailabilityEnum, IPost } from "../../DB/model/post.model";
 import { PostRepository } from "../../DB/repositories/post.repository";
-import userModel from "../../DB/model/user.model";
+import userModel, { RoleType } from "../../DB/model/user.model";
 import { UserRepository } from "../../DB/repositories/user.repository";
 import { AppError } from "../../utils/classError";
 import { deleteFiles, uploadFiles } from "../../utils/s3.config";
 import { uuid } from "uuidv4";
 import {
   ActionEnum,
+  freezePostSchemaType,
   likePostQueryDTO,
   PostLikeSchemaType,
   updatePostParamsDTO,
 } from "./posts.validation";
 import { UpdateQuery } from "mongoose";
 import { eventEmitter } from "../../utils/Events/Email.event";
+import { CommentRepository } from "../../DB/repositories/comment.repository";
+import commentModel from "../../DB/model/comment.model";
 
 class PostServices {
   private _postModel = new PostRepository(postModel);
   private _userModel = new UserRepository(userModel);
+  private _commentModel = new CommentRepository(commentModel);
   constructor() {}
 
   createPost = async (req: Request, res: Response, next: NextFunction) => {
@@ -32,7 +36,7 @@ class PostServices {
       ) {
         throw new AppError("InValid User ID ");
       }
-      
+
       const assetFolderId = uuid();
       let attachments: string[] = [];
       if (req.files?.length) {
@@ -52,10 +56,10 @@ class PostServices {
         deleteFiles({ Keys: attachments });
         throw new AppError("Failed to create post", 500);
       }
-      req.body.tags.forEach((tag:string ) => {
+      req.body.tags.forEach((tag: string) => {
         eventEmitter.emit("sendEmailToTagged", {
           email: tag,
-          link:post._id,
+          link: post._id,
           subject: `${req.user.email} mentioned you in there post`,
         });
       });
@@ -67,7 +71,91 @@ class PostServices {
       );
     }
   };
-  likePost = async (req: Request, res: Response, next: NextFunction) => {
+  freezePost = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { userId, postId }: freezePostSchemaType = req.params;
+      if (userId && req.user?.role !== RoleType.admin) {
+        throw new AppError("UnAuthorized", 401);
+      }
+      const post = await this._postModel.findOneAndUpdate(
+        {
+          _id: postId,
+          createdBy: userId || req.user?._id,
+          deletedAt: { $exists: false },
+        },
+        {
+          deletedAt: new Date(),
+          deletedBy: req.user?._id,
+        }
+      );
+      if (!post) {
+        throw new AppError("Post not found.", 404);
+      }
+      return res.status(200).json({ message: "Post Freezed" });
+    } catch (error) {
+      throw new AppError(
+        (error as unknown as any).message,
+        (error as unknown as any).statusCode
+      );
+    }
+  };
+  unfreezePost = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { userId, postId }: freezePostSchemaType = req.params;
+      if (req.user?.role !== RoleType.admin) {
+        throw new AppError("UnAuthorized", 401);
+      }
+      const post = await this._postModel.findOneAndUpdate(
+        {
+          _id: postId,
+          createdBy: userId || req.user?._id,
+          deletedAt: { $exists: true },
+          deletedBy: { $ne: req.user?._id },
+        },
+        {
+          restoredAt: new Date(),
+          restoredBy: req.user?._id,
+          $unset: { deletedAt: "", deletedBy: "" },
+        }
+      );
+      if (!post) {
+        throw new AppError("User not found.", 404);
+      }
+      return res.status(200).json({ message: "Freezed" });
+    } catch (error) {
+      throw new AppError(
+        (error as unknown as any).message,
+        (error as unknown as any).statusCode
+      );
+    }
+  };
+  deletePost = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { userId, postId }: freezePostSchemaType = req.params;
+      if (userId && req.user?.role !== RoleType.admin) {
+        throw new AppError("UnAuthorized", 401);
+      }
+      const post = await this._postModel.findOneAndDelete({
+        _id: postId,
+        createdBy: userId || req.user?._id,
+      });
+      if (!post) {
+        throw new AppError("Post not found.", 404);
+      }
+      await this._commentModel.deleteMany({ postId });
+      return res.status(200).json({ message: "Post Deleted", post });
+    } catch (error) {
+      throw new AppError(
+        (error as unknown as any).message,
+        (error as unknown as any).statusCode
+      );
+    }
+  };
+  like_Unlike_Post = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) => {
     try {
       const { postId }: PostLikeSchemaType = req.params;
       const { action }: likePostQueryDTO = req.query;
@@ -206,6 +294,24 @@ class PostServices {
       throw new AppError(
         (error as unknown as any).message,
         (error as unknown as any).statusCode
+      );
+    }
+  };
+  getPostById = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { postId } = req.params;
+      const post = await this._postModel.findOne({ _id: postId }, undefined, {
+        populate: [
+          { path: "createdBy", select: "userName email profileImage" },
+        ],
+      });
+      if (!post) {
+        throw new AppError("Post not found", 404);
+      }
+      return res.status(200).json({ message: "Success", post });
+    } catch (error) {
+      next(
+        new AppError((error as any).message, (error as any).statusCode || 500)
       );
     }
   };

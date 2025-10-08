@@ -2,6 +2,8 @@ import {
   DeleteResult,
   HydratedDocument,
   Model,
+  MongooseBaseQueryOptions,
+  MongooseUpdateQueryOptions,
   ProjectionType,
   QueryOptions,
   RootFilterQuery,
@@ -17,9 +19,9 @@ export abstract class DBRepository<TDocument> {
   async findOne(
     filter: RootFilterQuery<TDocument>,
     select?: ProjectionType<TDocument>,
-    options?:QueryOptions<TDocument>,
+    options?: QueryOptions<TDocument>
   ): Promise<HydratedDocument<TDocument> | null> {
-    return this.model.findOne(filter, select,options);
+    return this.model.findOne(filter, select, options);
   }
   async find({
     filter,
@@ -52,13 +54,20 @@ export abstract class DBRepository<TDocument> {
       skip,
       limit,
     };
-    return this.model.find(filter, select, finalOptions );
+    return this.model.find(filter, select, finalOptions);
   }
   async updateOne(
     filter: RootFilterQuery<TDocument>,
     update: UpdateQuery<TDocument>
   ): Promise<UpdateWriteOpResult> {
     return await this.model.updateOne(filter, update);
+  }
+  async updateMany(
+    filter: RootFilterQuery<TDocument>,
+    update: UpdateQuery<TDocument>,
+    options?: MongooseUpdateQueryOptions<TDocument> | null
+  ) {
+    return this.model.updateMany(filter, update, options);
   }
   async findOneAndUpdate(
     filter: RootFilterQuery<TDocument>,
@@ -69,5 +78,18 @@ export abstract class DBRepository<TDocument> {
   }
   async delteOne(filter: RootFilterQuery<TDocument>): Promise<DeleteResult> {
     return this.model.deleteOne(filter);
+  }
+
+  async findOneAndDelete(
+    filter: RootFilterQuery<TDocument>,
+    options?: QueryOptions<TDocument> | null
+  ) {
+    return await this.model.findOneAndDelete(filter, options);
+  }
+  async deleteMany(
+    filter: RootFilterQuery<TDocument>,
+    options?: MongooseBaseQueryOptions<TDocument> | null
+  ) {
+    return await this.model.deleteMany(filter, options);
   }
 }

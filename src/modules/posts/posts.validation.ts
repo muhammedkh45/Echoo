@@ -89,10 +89,17 @@ export const updatePostSchema = {
     postId: generalRules.id,
   }),
 };
+export const freezeSchema = {
+  params: z.strictObject({
+    userId: generalRules.id.optional(),
+    postId: generalRules.id.optional(),
+  }),
+};
 export type createPostSchemaType = Partial<
   z.infer<typeof createPostSchema.body>
 >;
 export type PostLikeSchemaType = Partial<z.infer<typeof postLikeSchema.params>>;
+export type freezePostSchemaType = Partial<z.infer<typeof freezeSchema.params>>;
 export type likePostQueryDTO = Partial<z.infer<typeof postLikeSchema.query>>;
 export type updatePostParamsDTO = Partial<
   z.infer<typeof updatePostSchema.params>

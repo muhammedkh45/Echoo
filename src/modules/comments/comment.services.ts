@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 import { PostRepository } from "../../DB/repositories/post.repository";
 import { UserRepository } from "../../DB/repositories/user.repository";
-import userModel from "../../DB/model/user.model";
+import userModel, { RoleType } from "../../DB/model/user.model";
 import postModel, {
   AllowCommentEnum,
   AvailabilityEnum,
@@ -16,11 +16,13 @@ import { AppError } from "../../utils/classError";
 import {
   createCommentBodySchemaType,
   createCommentParamsSchemaType,
+  freezeCommentSchemaType,
 } from "./comment.validation";
 import { deleteFiles, uploadFiles } from "../../utils/s3.config";
 import { uuid } from "uuidv4";
 import { populate } from "dotenv";
 import { HydratedDocument, Types } from "mongoose";
+import { eventEmitter } from "../../utils/Events/Email.event";
 
 class CommentServices {
   private _postModel = new PostRepository(postModel);
@@ -111,7 +113,13 @@ class CommentServices {
           path: `users/${doc?.createdBy}/posts/${doc?.assetFolderId}/comments/${assetFolderId}`,
         });
       }
-
+      req.body.tags.forEach((tag: string) => {
+        eventEmitter.emit("sendEmailToTagged", {
+          email: tag,
+          link: comment._id,
+          subject: `${req.user.email} mentioned you in there comment`,
+        });
+      });
       const comment = await this._commentModel.create({
         content,
         tags,
@@ -132,87 +140,218 @@ class CommentServices {
       );
     }
   };
-  likeComment = async (req: Request, res: Response, next: NextFunction) => {
+  freezeComment = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      //   const { postId }: PostLikeSchemaType = req.params;
-      //   const { action }: likePostQueryDTO = req.query;
-      //   let updateQuery: UpdateQuery<IPost> = {
-      //     $addToSet: { likes: req.user?._id },
-      //   };
-      //   if (action === ActionEnum.unlike) {
-      //     updateQuery = { $pull: { likes: req.user?._id } };
-      //   }
-      //   const post = await this._postModel.findOneAndUpdate(
-      //     {
-      //       id: postId,
-      //       $or: [
-      //         { availability: AvailabilityEnum.public },
-      //         {
-      //           availability: AvailabilityEnum.private,
-      //           createdBy: req.user?._id,
-      //         },
-      //         {
-      //           availability: AvailabilityEnum.friends,
-      //           createdBy: { $in: [...(req.user?.friends || []), req.user?._id] },
-      //         },
-      //       ],
-      //     },
-      //     { ...updateQuery },
-      //     { new: true }
-      //   );
-      //   if (!post) {
-      //     throw new AppError(`Faild to ${action} post`, 404);
-      //   }
-      //   return res.status(201).json({ message: `${action} successfully`, post });
+      const { userId, commentId }: freezeCommentSchemaType = req.params;
+      if (userId && req.user?.role !== RoleType.admin) {
+        throw new AppError("Unauthorized", 401);
+      }
+      const comment = await this._commentModel.findOne({
+        _id: commentId,
+        deletedAt: { $exists: false },
+      });
+
+      if (!comment) {
+        throw new AppError("Comment not found or already deleted", 404);
+      }
+
+      const parent =
+        comment.onModel === onModelEnum.Post
+          ? await this._postModel.findOne({
+              _id: comment.refId,
+            })
+          : await this._commentModel.findOne({
+              _id: comment.refId,
+            });
+
+      if (!parent) {
+        throw new AppError("Comment does not belong to the given post", 400);
+      }
+
+      if (
+        req.user?.role !== RoleType.admin &&
+        comment.createdBy.toString() !== req.user?._id.toString()
+      ) {
+        throw new AppError("Unauthorized to freeze this comment", 401);
+      }
+      comment.deletedAt = new Date();
+      comment.deletedBy = req.user?._id;
+      await comment.save();
+      await this._commentModel.updateMany(
+        { refId: commentId, deletedAt: { $exists: false } },
+        {
+          deletedAt: new Date(),
+          deletedBy: req.user?._id,
+        }
+      );
+      return res.status(200).json({ message: "Comment frozen successfully" });
     } catch (error) {
-      throw new AppError(
-        (error as unknown as any).message,
-        (error as unknown as any).statusCode
+      next(
+        new AppError((error as any).message, (error as any).statusCode || 500)
       );
     }
   };
-  updateComment = async (req: Request, res: Response, next: NextFunction) => {
+  unfreezeComment = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      //   const { postId }: updatePostParamsDTO = req.params;
-      //   const post = await this._postModel.findOne({ id: postId });
-      //   if (!post) {
-      //     throw new AppError("Not Found", 404);
-      //   }
-      //   if (post && req.user?._id !== post.createdBy) {
-      //     throw new AppError("Unauthorized", 401);
-      //   }
-      //   if (req?.body?.content) {
-      //     post.content = req.body.content;
-      //   }
-      //   if (req?.body?.availability) {
-      //     post.availability = req.body.availability;
-      //   }
-      //   if (req?.body?.allowComment) {
-      //     post.allowComment = req.body.allowComment;
-      //   }
-      //   if (req?.files?.length) {
-      //     await deleteFiles({ Keys: post.attachments! });
-      //     post.attachments = await uploadFiles({
-      //       files: req?.files as unknown as Express.Multer.File[],
-      //       path: `users/${req.user?._id}/posts/${post.assetFolderId}`,
-      //     });
-      //   }
-      //   if (req.body.tags.length) {
-      //     if (
-      //       req.body.tags?.length &&
-      //       (await this._userModel.find({ _id: { $in: req.body.tags } }))
-      //         .length !== req.body.tags?.length
-      //     ) {
-      //       throw new AppError("InValid User ID ");
-      //     }
-      //     post.tags = req.body.tags;
-      //   }
-      //   await post.save();
-      //   return res.status(200).json({ message: "Updated", post });
+      const { userId, postId, commentId }: freezeCommentSchemaType = req.params;
+
+      if (req.user?.role !== RoleType.admin) {
+        throw new AppError("Unauthorized", 401);
+      }
+
+      const comment = await this._commentModel.findOne({
+        _id: commentId,
+        refId: postId,
+        createdBy: userId || req.user?._id,
+      });
+
+      if (!comment) {
+        throw new AppError("Comment not found or unauthorized", 404);
+      }
+
+      if (!comment.deletedAt) {
+        throw new AppError("Comment is already active", 400);
+      }
+
+      comment.restoredAt = new Date();
+      comment.restoredBy = req.user?._id;
+      comment.deletedAt = undefined;
+      comment.deletedBy = undefined;
+      await comment.save();
+      await this._commentModel.updateMany(
+        { refId: commentId, deletedAt: { $exists: true } },
+        {
+          restoredAt: new Date(),
+          restoredBy: req.user?._id,
+          $unset: { deletedAt: "", deletedBy: "" },
+        }
+      );
+      return res.status(200).json({ message: "Comment unfrozen successfully" });
     } catch (error) {
       throw new AppError(
-        (error as unknown as any).message,
-        (error as unknown as any).statusCode
+        (error as any).message || "Failed to unfreeze comment",
+        (error as any).statusCode || 500
+      );
+    }
+  };
+
+  deleteComment = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { userId, postId, commentId }: freezeCommentSchemaType = req.params;
+
+      if (userId && req.user?.role !== RoleType.admin) {
+        throw new AppError("Unauthorized", 401);
+      }
+
+      const comment = await this._commentModel.findOne({
+        _id: commentId,
+        refId: postId,
+        createdBy: userId || req.user?._id,
+      });
+
+      if (!comment) {
+        throw new AppError("Comment not found or unauthorized", 404);
+      }
+
+      await comment.deleteOne();
+      await this._commentModel.deleteMany({ refId: commentId });
+
+      return res
+        .status(200)
+        .json({ message: "Comment and its children deleted" });
+    } catch (error) {
+      throw new AppError(
+        (error as any).message || "Failed to delete comment",
+        (error as any).statusCode || 500
+      );
+    }
+  };
+
+  updateComment = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { commentId } = req.params;
+      const comment = await this._commentModel.findOne({ _id: commentId });
+      if (!comment) {
+        throw new AppError("Comment not found", 404);
+      }
+      if (
+        req.user?.role !== RoleType.admin &&
+        comment.createdBy.toString() !== req.user?._id.toString()
+      ) {
+        throw new AppError("Unauthorized", 401);
+      }
+      if (
+        req.body.tags?.length &&
+        (
+          await this._userModel.find({
+            filter: { _id: { $in: req.body.tags } },
+          })
+        ).length !== req.body.tags?.length
+      ) {
+        throw new AppError("Invalid User ID", 400);
+      }
+      let attachments = comment.attachments || [];
+      if (req.files?.length) {
+        if (attachments.length) {
+          await deleteFiles({ Keys: attachments });
+        }
+        attachments = await uploadFiles({
+          files: req.files as unknown as Express.Multer.File[],
+          path: `users/${comment.createdBy}/posts/${comment.refId}/comments/${comment.assetFolderId}`,
+        });
+      }
+      comment.content = req.body.content ?? comment.content;
+      comment.tags = req.body.tags ?? comment.tags;
+      comment.attachments = attachments;
+      await comment.save();
+      req.body.tags.forEach((tag: string) => {
+        eventEmitter.emit("sendEmailToTagged", {
+          email: tag,
+          link: comment._id,
+          subject: `${req.user.email} mentioned you in there comment`,
+        });
+      });
+      return res
+        .status(200)
+        .json({ message: "Comment updated successfully", comment });
+    } catch (error) {
+      next(
+        new AppError((error as any).message, (error as any).statusCode || 500)
+      );
+    }
+  };
+  getCommentWithReply = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) => {
+    try {
+      const { commentId } = req.params;
+      const comment = await this._commentModel.findOne(
+        { _id: commentId },
+        undefined,
+        {
+          populate: [
+            { path: "refId" },
+            { path: "createdBy", select: "userName email profileImage" },
+          ],
+        }
+      );
+      if (!comment) {
+        throw new AppError("Comment not found", 404);
+      }
+      const replies = await this._commentModel.find({
+        filter: { refId: comment._id, onModel: "Comment" },
+        options: {
+          populate: [
+            { path: "createdBy", select: "userName email profileImage" },
+          ],
+        },
+      });
+      return res.status(200).json({ message: "Success", comment, replies });
+    } catch (error) {
+      next(
+        new AppError((error as any).message, (error as any).statusCode || 500)
       );
     }
   };

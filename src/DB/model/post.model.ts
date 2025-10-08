@@ -1,5 +1,4 @@
 import mongoose, { Schema, Types } from "mongoose";
-import { maxLength, minLength } from "zod";
 export enum AllowCommentEnum {
   allow = "allow",
   disallow = "disallow",

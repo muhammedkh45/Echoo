@@ -96,19 +96,9 @@ export const resetPasswordSchema = {
     }),
 };
 export const freezeSchema = {
-  params: z
-    .strictObject({
-      userId: generalRules.id.optional(),
-    })
-    .refine(
-      (value) => {
-        return value?.userId ? Types.ObjectId.isValid(value.userId) : true;
-      },
-      {
-        message: "UserId is not 24 hex",
-        path: ["freeze schema -> userId"],
-      }
-    ),
+  params: z.strictObject({
+    userId: generalRules.id.optional(),
+  }),
 };
 
 export const actionOnReqSchema = {

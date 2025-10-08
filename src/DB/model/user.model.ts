@@ -45,6 +45,8 @@ export interface IUser {
   deletedBy?: Types.ObjectId;
   restoredAt?: Date;
   restoredBy?: Types.ObjectId;
+  blockedAt?: Date;
+  blockedBy?: Types.ObjectId;
   friends?: Types.ObjectId[];
   isTwoFactorEnable?: boolean;
 }
@@ -109,6 +111,8 @@ const userSchema = new mongoose.Schema<IUser>(
     deletedBy: { types: Types.ObjectId, ref: "User" },
     restoredAt: { types: Date },
     restoredBy: { types: Types.ObjectId, ref: "User" },
+    blockedAt: { types: Date },
+    blockedBy: { types: Types.ObjectId, ref: "User" },
     friends: [{ type: Types.ObjectId, ref: "User" }],
     isTwoFactorEnable: { type: Boolean, default: false },
   },

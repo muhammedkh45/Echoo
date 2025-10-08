@@ -7,7 +7,13 @@ import {
   fileValidation,
   multerCloud,
 } from "../../middleware/multer.middleware";
-const commentRouter = Router({mergeParams:true});
+const commentRouter = Router({ mergeParams: true });
+
+commentRouter.get(
+  "/:commentId/replies",
+  Authentication(),
+  CS.getCommentWithReply
+);
 commentRouter.post(
   "/",
   Authentication(),
@@ -16,18 +22,31 @@ commentRouter.post(
   CS.createComment
 );
 commentRouter.patch(
-  "/:postId/action",
+  "/freeze{/:userId}{/:postId}",
   Authentication(),
-  validation(CV.commentLikeSchema),
-  CS.likeComment
+  validation(CV.freezeSchema),
+  CS.freezeComment
+);
+commentRouter.patch(
+  "/unfreeze{/:userId}{/:postId}",
+  Authentication(),
+  validation(CV.freezeSchema),
+  CS.unfreezeComment
+);
+commentRouter.delete(
+  "/unfreeze{/:userId}{/:postId}",
+  Authentication(),
+  validation(CV.freezeSchema),
+  CS.deleteComment
 );
 commentRouter.patch(
   "/update/:postId",
   Authentication(),
   multerCloud({ fileTypes: fileValidation.image }).array("attachments", 2),
-  validation(CV.updateCommentSchema),
+  validation(CV.createCommentSchema),
   CS.updateComment
 );
+
 export default commentRouter;
 
 //localhost:3000/posts/:postId/comments

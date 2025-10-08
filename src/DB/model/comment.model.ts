@@ -12,8 +12,6 @@ export interface IComment {
   tags: Types.ObjectId[];
   likes: Types.ObjectId[];
   refId: Types.ObjectId;
-  postId: Types.ObjectId;
-  commentId?: Types.ObjectId;
   deletedAt?: Date;
   deletedBy?: Types.ObjectId;
   restoredAt?: Date;
@@ -42,8 +40,6 @@ const commentSchema = new Schema<IComment>(
     restoredBy: { type: Schema.Types.ObjectId, ref: "User" },
     refId: { type: Schema.Types.ObjectId, refPath: "onModel", required: true },
     onModel: { type: String, enum: onModelEnum, required: true },
-    postId: { type: Schema.Types.ObjectId, ref: "Post", required: true },
-    commentId: { type: Schema.Types.ObjectId, ref: "Comment" },
   },
   {
     timestamps: true,

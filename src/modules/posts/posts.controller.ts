@@ -9,6 +9,7 @@ import {
 } from "../../middleware/multer.middleware";
 import commentRouter from "../comments/comment.controller";
 const postRouter = Router();
+postRouter.get("/:postId", PS.getPostById);
 postRouter.use("/:postId/comments{/:commentId/reply}", commentRouter);
 postRouter.post(
   "/create",
@@ -18,10 +19,28 @@ postRouter.post(
   PS.createPost
 );
 postRouter.patch(
+  "/freeze{/:userId}{/:postId}",
+  Authentication(),
+  validation(PV.freezeSchema),
+  PS.freezePost
+);
+postRouter.patch(
+  "/unfreeze{/:userId}{/:postId}",
+  Authentication(),
+  validation(PV.freezeSchema),
+  PS.unfreezePost
+);
+postRouter.delete(
+  "/unfreeze{/:userId}{/:postId}",
+  Authentication(),
+  validation(PV.freezeSchema),
+  PS.deletePost
+);
+postRouter.patch(
   "/:postId/action",
   Authentication(),
   validation(PV.postLikeSchema),
-  PS.likePost
+  PS.like_Unlike_Post
 );
 postRouter.patch(
   "/update/:postId",
