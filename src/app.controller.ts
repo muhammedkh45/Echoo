@@ -9,6 +9,8 @@ import userRouter from "./modules/users/users.controller";
 import postRouter from "./modules/posts/posts.controller";
 import connectDB from "./DB/connection.db";
 import { Server } from "socket.io";
+import { initializeGateway } from "./modules/gateway.ts/gateway";
+import chatRouter from "./modules/chat/chat.controller";
 dotenv.config({ path: path.resolve("config/.env") });
 const app: express.Application = express();
 const port: string | number = process.env.PORT || 5000;
@@ -30,6 +32,7 @@ const bootstrap = async () => {
   );
   app.use("/users", userRouter);
   app.use("/posts", postRouter);
+  app.use("/chats", chatRouter);
   app.use("{/*demo}", (req: Request, res: Response) => {
     // return res
     //   .status(404)
@@ -44,18 +47,8 @@ const bootstrap = async () => {
   const server = app.listen(port, () =>
     console.log(`Example app listening on port ${port}!`)
   );
-  const io = new Server(server, {
-    cors: {
-      origin: "*",
-    },
-  });
-  io.on("connection", (socket) => {
-    socket.on("chatMessage", (msg, callback) => {
-      console.log(msg);
-      callback("Hi from server");
-    });
-    console.log("a user connected");
-  });
+
+  initializeGateway(server);
 };
 
 export default bootstrap;

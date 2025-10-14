@@ -72,8 +72,8 @@ export abstract class DBRepository<TDocument> {
   async findOneAndUpdate(
     filter: RootFilterQuery<TDocument>,
     update: UpdateQuery<TDocument>,
-    options: QueryOptions<TDocument> | null = { new: true }
-  ): Promise<UpdateWriteOpResult | null> {
+    options: QueryOptions<TDocument> = { new: true }
+  ): Promise<HydratedDocument<TDocument> | null> {
     return await this.model.findOneAndUpdate(filter, update, options);
   }
   async delteOne(filter: RootFilterQuery<TDocument>): Promise<DeleteResult> {

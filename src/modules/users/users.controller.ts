@@ -10,7 +10,9 @@ import {
 } from "../../middleware/multer.middleware";
 import { Authorization } from "../../middleware/authorization.middleware";
 import { RoleType } from "../../DB/model/user.model";
+import chatRouter from "../chat/chat.controller";
 const userRouter = Router();
+userRouter.use("/:userId/chat", chatRouter);
 userRouter.patch(
   "/unfriend/:userId",
   Authentication,

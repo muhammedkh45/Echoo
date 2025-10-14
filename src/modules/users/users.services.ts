@@ -48,64 +48,12 @@ import friendRequestModel, {
 } from "../../DB/model/friendRequest.model";
 import { Types } from "mongoose";
 import { compare } from "bcrypt";
+import { ChatRepository } from "../../DB/repositories/chat.repository";
+import { chatModel } from "../../DB/model/chat.model";
 class UserServices {
-  unfriendUser = async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { userId } = req.params;
-      if (req.user?._id.toString() === userId) {
-        throw new AppError("You cannot unfriend yourself.", 400);
-      }
-      const user = await this._userModel.findOne({ _id: req.user._id });
-      if (!user) {
-        throw new AppError("User not found.", 404);
-      }
-      const updated = await this._userModel.updateOne(
-        { _id: req.user._id },
-        { $pull: { friends: userId } }
-      );
-      if (!updated.modifiedCount) {
-        throw new AppError("User was not in your friends list.", 404);
-      }
-      return res.status(200).json({ message: "User unfriended successfully." });
-    } catch (error) {
-      throw new AppError(
-        (error as any).message,
-        (error as any).statusCode || 500
-      );
-    }
-  };
-  blockUser = async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { userId } = req.params;
-      if (
-        req.user?.role !== RoleType.admin &&
-        req.user?._id.toString() !== userId
-      ) {
-        throw new AppError("Unauthorized", 401);
-      }
-      const user = await this._userModel.findOneAndUpdate(
-        { _id: userId, blockedAt: { $exists: false } },
-        {
-          blockedAt: new Date(),
-          blockedBy: req.user?._id,
-        },
-        { new: true }
-      );
-      if (!user) {
-        throw new AppError("User not found or already blocked.", 404);
-      }
-      return res
-        .status(200)
-        .json({ message: "User blocked successfully", user });
-    } catch (error) {
-      throw new AppError(
-        (error as any).message,
-        (error as any).statusCode || 500
-      );
-    }
-  };
   private _userModel = new UserRepository(userModel);
   private _postModel = new PostRepository(postModel);
+  private _chatModel = new ChatRepository(chatModel);
   private _friendRequestModel = new FriendRequestRepository(friendRequestModel);
   private _revokeTokenModel = new RevokeTokenRepository(revokeTokenModel);
   constructor() {}
@@ -295,6 +243,23 @@ class UserServices {
   };
   getProfile = async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const user = await this._userModel.findOne(
+        { _id: req.user?._id },
+        undefined,
+        {
+          populate: [
+            {
+              path: "friends",
+            },
+          ],
+        }
+      );
+      const groups = await this._chatModel.find({
+        filter: {
+          participants: { $in: [req.user?._id] },
+          group: { $exists: true },
+        },
+      });
       return res.status(200).json({ message: "User Profile.", user: req.user });
     } catch (error) {
       throw new AppError(
@@ -939,6 +904,61 @@ class UserServices {
       throw new AppError(
         (error as unknown as any).message,
         (error as unknown as any).statusCode
+      );
+    }
+  };
+  unfriendUser = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { userId } = req.params;
+      if (req.user?._id.toString() === userId) {
+        throw new AppError("You cannot unfriend yourself.", 400);
+      }
+      const user = await this._userModel.findOne({ _id: req.user._id });
+      if (!user) {
+        throw new AppError("User not found.", 404);
+      }
+      const updated = await this._userModel.updateOne(
+        { _id: req.user._id },
+        { $pull: { friends: userId } }
+      );
+      if (!updated.modifiedCount) {
+        throw new AppError("User was not in your friends list.", 404);
+      }
+      return res.status(200).json({ message: "User unfriended successfully." });
+    } catch (error) {
+      throw new AppError(
+        (error as any).message,
+        (error as any).statusCode || 500
+      );
+    }
+  };
+  blockUser = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { userId } = req.params;
+      if (
+        req.user?.role !== RoleType.admin &&
+        req.user?._id.toString() !== userId
+      ) {
+        throw new AppError("Unauthorized", 401);
+      }
+      const user = await this._userModel.findOneAndUpdate(
+        { _id: userId, blockedAt: { $exists: false } },
+        {
+          blockedAt: new Date(),
+          blockedBy: req.user?._id,
+        },
+        { new: true }
+      );
+      if (!user) {
+        throw new AppError("User not found or already blocked.", 404);
+      }
+      return res
+        .status(200)
+        .json({ message: "User blocked successfully", user });
+    } catch (error) {
+      throw new AppError(
+        (error as any).message,
+        (error as any).statusCode || 500
       );
     }
   };
