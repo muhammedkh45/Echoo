@@ -1,6 +1,6 @@
 # Echoo
 
-## Project Description
+## Project Overview
 
 Echoo is a modern web application designed to provide a robust and scalable platform for managing posts, users, and various other features. Built with TypeScript and Node.js, Echoo leverages a modular architecture to ensure maintainability and scalability. The project integrates AWS S3 for file storage, JWT for authentication, and MongoDB for data persistence.
 
@@ -29,6 +29,29 @@ Echoo is a modern web application designed to provide a robust and scalable plat
 - **File Deletion**: Delete single or multiple files from AWS S3.
 - **Presigned URLs**: Generate presigned URLs for secure file access.
 
+### Comment Management
+
+- **Add Comments**: Users can add comments to posts.
+- **Reply to Comments**: Support for nested comments (replies).
+- **Edit Comments**: Edit existing comments.
+- **Delete Comments**: Remove comments.
+- **List Comments**: Retrieve comments for a specific post.
+
+### Chat Functionality
+
+- **Real-time Messaging**: Instant messaging between users.
+- **Group Chats**: Create and manage group conversations.
+- **Message History**: Retrieve past chat messages.
+- **Typing Indicators**: Show when users are typing.
+- **Read Receipts**: Indicate when messages have been read.
+
+### GraphQL API
+
+- **File Upload**: Upload files to AWS S3 using the `@aws-sdk/client-s3` library.
+- **Large File Upload**: Support for uploading large files using AWS S3 multipart upload.
+- **File Deletion**: Delete single or multiple files from AWS S3.
+- **Presigned URLs**: Generate presigned URLs for secure file access.
+
 ### Security
 
 - **JWT Authentication**: Secure access to protected routes using JSON Web Tokens.
@@ -44,12 +67,15 @@ Echoo is a modern web application designed to provide a robust and scalable plat
 ## Technologies Used
 
 - **Backend**: Node.js, Express.js
-- **Database**: MongoDB with Mongoose
+- **Database**: MongoDB with Mongoose, Redis (for caching and real-time features)
 - **Authentication**: JWT, bcrypt
 - **File Storage**: AWS S3
 - **Validation**: Joi
-- **Other Libraries**: `uuid`, `@aws-sdk/client-s3`, `@aws-sdk/lib-storage`
+- **Real-time**: Socket.IO
+- **GraphQL**: Apollo Server
+- **Other Libraries**: `uuid`, `@aws-sdk/client-s3`, `@aws-sdk/lib-storage`, `ioredis`
 
+## Architecture
 ## Project Structure
 
 The project follows a modular structure to ensure scalability and maintainability:
@@ -60,6 +86,8 @@ src/
 ├── middleware/        # Middleware for authentication, validation, etc.
 ├── modules/           # Feature-specific modules (e.g., users, posts)
 ├── services/          # Business logic and service classes
+├── graphql/           # GraphQL schema, resolvers, and types
+├── websocket/         # Socket.IO event handlers and logic
 ├── utils/             # Utility functions and configurations
 ```
 

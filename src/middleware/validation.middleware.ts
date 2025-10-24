@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 import { ZodType } from "zod";
 import { AppError } from "../utils/classError";
+import { GraphQLError } from "graphql";
 type reqTypes = keyof Request;
 type schemaType = Partial<Record<reqTypes, ZodType>>;
 const validation = (schema: schemaType) => {
@@ -27,6 +28,18 @@ const validation = (schema: schemaType) => {
     }
     next();
   };
+};
+export const validationGQL = async (schema: ZodType, args: any) => {
+  const validationErrors = [];
+  const result = schema?.safeParse(args);
+  if (!result.success) {
+    validationErrors.push(result.error);
+  }
+  if (validationErrors.length) {
+    throw new GraphQLError(JSON.parse(validationErrors as unknown as string), {
+      extensions: { code: "VALIDATION_ERROR", statusCode: 422 },
+    });
+  }
 };
 
 export default validation;

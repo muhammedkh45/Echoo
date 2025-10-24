@@ -17,6 +17,7 @@ import { UpdateQuery } from "mongoose";
 import { eventEmitter } from "../../utils/Events/Email.event";
 import { CommentRepository } from "../../DB/repositories/comment.repository";
 import commentModel from "../../DB/model/comment.model";
+import { GraphQLError } from "graphql";
 
 class PostServices {
   private _postModel = new PostRepository(postModel);
@@ -313,6 +314,16 @@ class PostServices {
       next(
         new AppError((error as any).message, (error as any).statusCode || 500)
       );
+    }
+  };
+
+  //==============GQL================
+  getPostsGQL = async (parent: any, args: any) => {
+    const posts = await this._postModel.find({ filter: {} });
+    if (posts.length === 0) {
+      throw new GraphQLError("No posts found.", {
+        extensions: { statusCode: 404 },
+      });
     }
   };
 }

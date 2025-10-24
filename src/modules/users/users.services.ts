@@ -10,6 +10,7 @@ import {
   confirmEmailSchemaType,
   forgetPasswordSchemaType,
   freezeSchemaType,
+  getOneUserSchema,
   logInSchemaType,
   logInWithGoogleSchemaType,
   logOutSchemaType,
@@ -50,6 +51,10 @@ import { Types } from "mongoose";
 import { compare } from "bcrypt";
 import { ChatRepository } from "../../DB/repositories/chat.repository";
 import { chatModel } from "../../DB/model/chat.model";
+import { GraphQLError } from "graphql";
+import { AuthenticationGQL } from "../../middleware/authentication.meddleware";
+import { AuthorizationGQL } from "../../middleware/authorization.middleware";
+import { validationGQL } from "../../middleware/validation.middleware";
 class UserServices {
   private _userModel = new UserRepository(userModel);
   private _postModel = new PostRepository(postModel);
@@ -57,6 +62,7 @@ class UserServices {
   private _friendRequestModel = new FriendRequestRepository(friendRequestModel);
   private _revokeTokenModel = new RevokeTokenRepository(revokeTokenModel);
   constructor() {}
+  //===================RestAPI=======================
   signUp = async (req: Request, res: Response, next: NextFunction) => {
     try {
       let {
@@ -513,7 +519,6 @@ class UserServices {
       );
     }
   };
-
   verifyNewEmail = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { otp } = req.body;
@@ -609,7 +614,6 @@ class UserServices {
       );
     }
   };
-
   getFile = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const writePipeLine = promisify(pipeline);
@@ -714,7 +718,6 @@ class UserServices {
       );
     }
   };
-
   unfreezeAccount = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { userId }: freezeSchemaType = req.params;
@@ -744,7 +747,6 @@ class UserServices {
       );
     }
   };
-
   dashBoard = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const results = await Promise.allSettled([
@@ -962,6 +964,52 @@ class UserServices {
       );
     }
   };
-}
 
+  //=========================GQL==========================
+
+  getOneUser = async (parent: any, args: any, context: any) => {
+    let { user } = await AuthenticationGQL(context.req.headers.authorization);
+    await AuthorizationGQL({
+      accessRoles: [RoleType.admin, RoleType.superAdmin],
+      role: user.role!,
+    });
+    await validationGQL(getOneUserSchema,args);
+    const userExist = await this._userModel.findOne({
+      _id: user._id,
+    });
+    if (!userExist) {
+      throw new GraphQLError("User not found.", {
+        extensions: { statusCode: 404 },
+      });
+    }
+    return user;
+  };
+  getUsers = async () => {
+    const users = await this._userModel.find({ filter: {} });
+    if (!userModel.length) {
+      throw new GraphQLError("Users not found.", {
+        extensions: { statusCode: 404 },
+      });
+    }
+    return users;
+  };
+  createUser = async (parent: any, args: any) => {
+    const { fName, lName, email, password, gender } = args;
+    const userExist = await this._userModel.findOne({ email });
+    if (userExist) {
+      throw new GraphQLError("User already exist", {
+        extensions: { statusCode: 400 },
+      });
+    }
+    const hashedPassword = await Hash(password);
+    const newUser = await this._userModel.createOneUser({
+      fName,
+      lName,
+      email,
+      password: hashedPassword,
+      gender,
+    });
+    return newUser;
+  };
+}
 export default new UserServices();

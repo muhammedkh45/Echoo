@@ -168,6 +168,11 @@ export const updateEmailSchema = {
       message: "Both new email and current password are required",
     }),
 };
+export const getOneUserSchema = z
+  .strictObject({
+    id: generalRules.id,
+  })
+  .required();
 export type signUpSchemaType = Partial<z.infer<typeof signUpSchema.body>>;
 export type logInSchemaType = Partial<z.infer<typeof logInSchema.body>>;
 export type logOutSchemaType = Partial<z.infer<typeof logOutSchema.body>>;

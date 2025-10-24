@@ -11,6 +11,9 @@ import connectDB from "./DB/connection.db";
 import { Server } from "socket.io";
 import { initializeGateway } from "./modules/gateway.ts/gateway";
 import chatRouter from "./modules/chat/chat.controller";
+import { createHandler } from "graphql-http";
+import { schemaGQL } from "./modules/GraphQL/Schema.gql";
+import { Authentication } from "./middleware/authentication.meddleware";
 dotenv.config({ path: path.resolve("config/.env") });
 const app: express.Application = express();
 const port: string | number = process.env.PORT || 5000;
@@ -25,6 +28,14 @@ const limiter = rateLimit({
   legacyHeaders: false,
 });
 const bootstrap = async () => {
+  app.all(
+    "/gql",
+    Authentication(),
+    createHandler({
+      schema: schemaGQL,
+      context: (req) =>({req}),
+    })
+  );
   app.use(express.json(), helmet(), cors(), limiter);
   await connectDB();
   app.get("/", (req: Request, res: Response) =>

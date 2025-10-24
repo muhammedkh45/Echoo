@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { RoleType } from "../DB/model/user.model";
+import { GraphQLError } from "graphql";
 
 export const Authorization = ({
   accessRoles = [],
@@ -12,4 +13,18 @@ export const Authorization = ({
     }
     next();
   };
+};
+export const AuthorizationGQL = ({
+  accessRoles = [],
+  role,
+}: {
+  accessRoles: RoleType[];
+  role: RoleType;
+}) => {
+  if (!accessRoles.includes(role)) {
+    throw new GraphQLError("Unauthorized", {
+      extensions: { statusCode: 401 },
+    });
+  }
+  return true;
 };
